@@ -6,6 +6,8 @@ import { IMemoryRepository } from "./repository/IMemoryRepository";
 import { MemoryRepository } from "./repository/memory.repository";
 import { IIndexManager } from "./index/IIndexManager";
 import { IndexManager } from "./index/index-manager";
+import { IRetrievalFactory } from "./retrieval/IRetrievalFactory";
+import { RetrievalStrategyFactory } from "./retrieval/retrieval-factory";
 
 /**
  * Dependency Injection Container
@@ -13,14 +15,6 @@ import { IndexManager } from "./index/index-manager";
  * All interface-to-implementation bindings are registered here.
  * Controllers and services declare dependencies via @inject() decorators —
  * they never call new() on a concrete class.
- * 
- * Log Format Support:
- *   ParserRegistry handles auto-detection. It contains:
- *   - ApacheRegexParser (Apache error logs)
- *   - GenericParser (fallback for unknown formats)
- *   
- *   To add a new format, add the parser to ParserRegistry's parser list.
- *   No other code changes needed.
  */
 
 // Parser — ParserRegistry auto-detects format from log content
@@ -38,8 +32,12 @@ container.register<IIndexManager>("IIndexManager", {
   useClass: IndexManager,
 }, { lifecycle: Lifecycle.Singleton });
 
-// --- Phase 3+ bindings will be added below ---
-// container.register<IRetrievalFactory>("IRetrievalFactory", { ... });
+// Retrieval — factory creates per-request strategies
+container.register<IRetrievalFactory>("IRetrievalFactory", {
+  useClass: RetrievalStrategyFactory,
+});
+
+// --- Phase 4 binding will be added below ---
 // container.register<IAIService>("IAIService", { ... });
 
 export { container };
