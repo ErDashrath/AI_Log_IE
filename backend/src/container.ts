@@ -8,6 +8,8 @@ import { IIndexManager } from "./index/IIndexManager";
 import { IndexManager } from "./index/index-manager";
 import { IRetrievalFactory } from "./retrieval/IRetrievalFactory";
 import { RetrievalStrategyFactory } from "./retrieval/retrieval-factory";
+import { IAIService } from "./ai/IAIService";
+import { GeminiAIService } from "./ai/gemini-ai.service";
 
 /**
  * Dependency Injection Container
@@ -37,7 +39,9 @@ container.register<IRetrievalFactory>("IRetrievalFactory", {
   useClass: RetrievalStrategyFactory,
 });
 
-// --- Phase 4 binding will be added below ---
-// container.register<IAIService>("IAIService", { ... });
+// AI — singleton (circuit breaker state persists across requests)
+container.register<IAIService>("IAIService", {
+  useClass: GeminiAIService,
+}, { lifecycle: Lifecycle.Singleton });
 
 export { container };
