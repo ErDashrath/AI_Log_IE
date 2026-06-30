@@ -188,4 +188,20 @@ export class IndexManager implements IIndexManager {
   getComponentIndex(): Map<string, number[]> { return this.componentIndex; }
   getTemplateIndex(): Map<string, number[]> { return this.templateIndex; }
   getTimestampSorted(): { lineNum: number; timestamp: Date }[] { return this.timestampSorted; }
+
+  /**
+   * Resets all indexes for a new file upload.
+   */
+  reset(): void {
+    this.severityIndex = new Map();
+    this.componentIndex = new Map();
+    this.templateIndex = new Map();
+    this.timestampSorted = [];
+    this.allLogs = [];
+    this.miniSearch = new MiniSearch({
+      fields: RETRIEVAL_CONFIG.miniSearch.fields,
+      storeFields: RETRIEVAL_CONFIG.miniSearch.storeFields,
+      idField: "id",
+    });
+  }
 }

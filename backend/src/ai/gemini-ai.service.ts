@@ -18,6 +18,8 @@ import {
   FALLBACK_TIMELINE,
   FALLBACK_RCA,
 } from "./fallbacks";
+import { config } from "dotenv";
+config();
 import pino from "pino";
 
 const logger = pino({ name: "gemini-ai-service" });
@@ -79,6 +81,7 @@ export class GeminiAIService implements IAIService {
       const result = await this.resilientCall.execute(async (context) => {
         retryCount = context.attempt;
 
+        // Standard Gemini Implementation
         const response = await this.genai.models.generateContent({
           model: AI_CONFIG.model,
           contents: prompt,
@@ -112,17 +115,26 @@ export class GeminiAIService implements IAIService {
       });
 
       return result;
-    } catch (err) {
-      // Circuit open or all retries exhausted → return fallback
+    } catch (err: any) {
       this.telemetry.recordFallback(err, endpoint);
-      logger.error({
-        msg: "AI call failed — returning fallback",
+      logger.warn({
+        msg: "Gemini AI call failed — attempting Groq fallback",
         endpoint,
         error: err instanceof Error ? err.message : String(err),
-        retryCount,
       });
 
-      return this.getFallback<T>(endpoint, schema);
+      try {
+        const { GroqAIService } = await import("./groq-ai.service");
+        const groqService = new GroqAIService();
+        return await groqService.callModel(prompt, schema, endpoint);
+      } catch (groqErr: any) {
+        logger.error({
+          msg: "Groq fallback also failed — returning static fallback JSON",
+          endpoint,
+          error: groqErr instanceof Error ? groqErr.message : String(groqErr),
+        });
+        return this.getFallback<T>(endpoint, schema);
+      }
     }
   }
 

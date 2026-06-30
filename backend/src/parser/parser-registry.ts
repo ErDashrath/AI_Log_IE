@@ -91,6 +91,13 @@ export class ParserRegistry implements ILogParser {
     return this.activeParser?.formatName || "none";
   }
 
+  /**
+   * Resets auto-detection so the next file triggers fresh format detection.
+   */
+  resetDetection(): void {
+    this.activeParser = null;
+  }
+
   // --- Internal ---
 
   private selectBestParser(sampleLines: string[]): { parser: ILogParser; confidence: number } {

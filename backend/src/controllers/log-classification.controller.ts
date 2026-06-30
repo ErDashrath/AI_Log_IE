@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { injectable, inject } from "tsyringe";
 import { z } from "zod";
 import { IAIService } from "../ai/IAIService";
+import { IRetrievalFactory } from "../retrieval/IRetrievalFactory";
 import { ClassificationResponseSchema } from "../schemas/classification.schema";
 import { classificationPrompt } from "../prompts/v1_classification.prompt";
 import { AI_CONFIG } from "../config/ai.config";
@@ -29,31 +30,34 @@ const ClassificationRequestSchema = z.object({
 @injectable()
 export class LogClassificationController {
   constructor(
-    @inject("IAIService") private aiService: IAIService
+    @inject("IAIService") private aiService: IAIService,
+    @inject("IRetrievalFactory") private retrievalFactory: IRetrievalFactory
   ) {}
 
   async handle(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
     try {
-      // Validate request body with Zod
-      const parseResult = ClassificationRequestSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        res.status(400).json({
-          success: false,
-          message: parseResult.error.errors[0].message,
+      // Create and execute retrieval strategy
+      const strategy = this.retrievalFactory.getStrategy("classification");
+      const logsToClassify = await strategy.retrieve();
+
+      if (logsToClassify.length === 0) {
+        res.status(200).json({
+          success: true,
+          message: "No logs available to classify",
           processingTimeMs: Date.now() - startTime,
-          data: null,
-        } as ApiResponse<null>);
+          data: { classifications: [] }
+        } as ApiResponse<any>);
         return;
       }
 
-      const { logs } = parseResult.data;
+      logger.info({ msg: "Classification request", logCount: logsToClassify.length });
 
-      logger.info({ msg: "Classification request", logCount: logs.length });
-
-      // Build prompt and call AI
-      const prompt = classificationPrompt(logs);
+      // Build prompt from retrieved logs
+      const rawLogs = logsToClassify.map(l => l.raw);
+      const prompt = classificationPrompt(rawLogs);
+      
       const result = await this.aiService.callModel(
         prompt,
         ClassificationResponseSchema,

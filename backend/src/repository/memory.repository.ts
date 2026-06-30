@@ -110,4 +110,13 @@ export class MemoryRepository implements IMemoryRepository {
       uniqueComponents,
     };
   }
+
+  /**
+   * Resets all data for a new file upload.
+   */
+  reset(): void {
+    this.logs = [];
+    this.state = "$LOADING$";
+    this.ingestionStartMs = Date.now();
+  }
 }

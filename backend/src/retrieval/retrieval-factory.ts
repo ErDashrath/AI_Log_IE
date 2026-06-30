@@ -44,7 +44,7 @@ export class RetrievalStrategyFactory implements IRetrievalFactory {
   ): IRetrievalStrategy {
     switch (endpoint) {
       case "classification":
-        return new ClassificationRetrieval(options?.logs || []);
+        return new ClassificationRetrieval(this.repo);
 
       case "timeline":
         return new TimelineRetrieval(

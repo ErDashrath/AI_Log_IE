@@ -9,7 +9,7 @@ import { ApiEndpoint } from "../retrieval/IRetrievalFactory";
  */
 export const AI_CONFIG = {
   /** Gemini model identifier */
-  model: "gemini-1.5-flash",
+  model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
 
   /** Temperature per endpoint */
   temperatures: {

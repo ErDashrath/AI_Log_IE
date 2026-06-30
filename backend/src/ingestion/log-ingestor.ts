@@ -51,9 +51,9 @@ export class LogIngestor {
       }
 
       // Auto-detect format from first 10 lines
-      if (this.parser instanceof ParserRegistry) {
+      if (typeof (this.parser as any).detectAndLock === 'function') {
         const sampleLines = allLines.slice(0, 10).filter((l) => l.trim());
-        const detection = this.parser.detectAndLock(sampleLines);
+        const detection = (this.parser as any).detectAndLock(sampleLines);
         logger.info({
           msg: "Format detection complete",
           format: detection.parser,
