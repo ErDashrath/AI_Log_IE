@@ -1,15 +1,21 @@
 import { Request, Response } from "express";
 import { injectable, inject } from "tsyringe";
 import { z } from "zod";
+import { IAIService } from "../ai/IAIService";
 import { IRetrievalFactory } from "../retrieval/IRetrievalFactory";
-import { ClassificationGraph } from "../ai/graphs/classification.graph";
+import { classificationPrompt } from "../prompts/v1_classification.prompt";
+import {
+  ClassificationResponse,
+  ClassificationResponseSchema,
+} from "../schemas/classification.schema";
 import { AI_CONFIG } from "../config/ai.config";
 import { ApiResponse } from "../schemas/api.schema";
+import { FALLBACK_CLASSIFICATION } from "../ai/fallbacks";
 import pino from "pino";
 
 const logger = pino({ name: "classification-controller" });
 
-// Request body schema — logs is optional
+// Request body schema — logs is optional (auto mode if omitted)
 const ClassificationRequestSchema = z.object({
   logs: z
     .array(z.string().min(1, "Log entry must not be empty"))
@@ -20,13 +26,41 @@ const ClassificationRequestSchema = z.object({
 });
 
 /**
+ * Deterministic severity override table.
+ * Applied post-LLM to guarantee consistent severity regardless of model drift.
+ * Per Architecture v7.0 §8.2.
+ */
+const CATEGORY_SEVERITY_MAP: Record<
+  string,
+  "critical" | "high" | "medium" | "low" | "info"
+> = {
+  error:                   "critical",
+  security:                "high",
+  shutdown:                "high",
+  performance:             "medium",
+  warning:                 "medium",
+  "backend communication": "low",
+  configuration:           "low",
+  "worker initialization": "low",
+  startup:                 "info",
+  unknown:                 "low",
+};
+
+function getSeverity(category: string): "critical" | "high" | "medium" | "low" | "info" {
+  return CATEGORY_SEVERITY_MAP[category.toLowerCase()] ?? "low";
+}
+
+/**
  * Log Classification Controller
  *
  * POST /api/ai/log-classification
  *
+ * Per Architecture v7.0 §7.4:
+ *   "Classification … [is] single-pass. LangGraph is used exclusively for RCA."
+ *
  * Dual-mode:
- *   Manual mode — caller supplies { logs: string[] } in the request body.
- *                 Logs are used as-is (pass-through, per arch §6.1).
+ *   Manual mode — caller supplies { logs: string[] }. Logs are used as-is
+ *                 (pass-through, per arch §6.1).
  *   Auto mode   — no body logs → ClassificationRetrieval selects a
  *                 diverse, tiered sample from the in-memory repository.
  *
@@ -36,6 +70,7 @@ const ClassificationRequestSchema = z.object({
 @injectable()
 export class LogClassificationController {
   constructor(
+    @inject("IAIService") private aiService: IAIService,
     @inject("IRetrievalFactory") private retrievalFactory: IRetrievalFactory
   ) {}
 
@@ -62,7 +97,7 @@ export class LogClassificationController {
 
     if (isManualMode) {
       // ── Manual Mode ──────────────────────────────────────────────
-      // Logs come from the request body — clean whitespace, filter empties
+      // Logs come directly from the request body — pass-through (arch §6.1)
       rawLogStrings = bodyLogs!
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
@@ -93,7 +128,7 @@ export class LogClassificationController {
         return;
       }
 
-      // Extract the raw string — DEFENSIVE: guard against missing/non-string .raw
+      // Extract raw strings — defensive guard against missing/non-string .raw
       rawLogStrings = logsFromRepo
         .map((l) => {
           if (typeof l.raw === "string" && l.raw.trim().length > 0) {
@@ -125,25 +160,50 @@ export class LogClassificationController {
       logger.info({
         msg: "Classification: auto mode",
         logCount: rawLogStrings.length,
-        sampleLog: rawLogStrings[0], // log the first raw string for debugging
+        sampleLog: rawLogStrings[0],
       });
     }
 
-    // --- Invoke Classification Graph ---
+    // --- Single-pass Gemini call via IAIService (per arch v7.0 §7.4) ---
     try {
-      const graphState = await ClassificationGraph.invoke({
-        rawLogs: rawLogStrings,
+      const prompt = classificationPrompt(rawLogStrings);
+      const aiResult = await this.aiService.callModel<ClassificationResponse>(
+        prompt,
+        ClassificationResponseSchema as import("zod").ZodSchema<ClassificationResponse>,
+        "classification"
+      );
+
+      // Post-process: deterministic severity override + summary
+      const enriched = aiResult.classifications.map((entry) => ({
+        ...entry,
+        severity: getSeverity(entry.category),
+      }));
+
+      const categorySummary = enriched.reduce<Record<string, number>>((acc, c) => {
+        acc[c.category] = (acc[c.category] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      const result: ClassificationResponse = {
+        classifications: enriched,
+        totalClassified: enriched.length,
+        categorySummary,
         mode,
+        fallback: aiResult.fallback ?? false,
+        fallbackReason: aiResult.fallbackReason,
+      };
+
+      logger.info({
+        msg: "Classification: complete",
+        classified: enriched.length,
+        categorySummary,
+        mode,
+        fallback: result.fallback,
       });
 
-      const result = graphState.result;
-      if (!result) {
-        throw new Error("Classification graph returned null result");
-      }
-
-      const response: ApiResponse<typeof result> = {
+      const response: ApiResponse<ClassificationResponse> = {
         success: true,
-        message: `Classification complete — ${result.totalClassified ?? result.classifications.length} entries classified`,
+        message: `Classification complete — ${enriched.length} entries classified`,
         processingTimeMs: Date.now() - startTime,
         data: result,
         fallback: result.fallback ?? false,
@@ -152,16 +212,17 @@ export class LogClassificationController {
       res.status(200).json(response);
     } catch (error) {
       logger.error({
-        msg: "Classification graph error",
+        msg: "Classification error",
         error: error instanceof Error ? error.message : String(error),
       });
 
-      res.status(500).json({
-        success: false,
-        message: `Classification failed: ${error instanceof Error ? error.message : "Internal server error"}`,
+      res.status(200).json({
+        success: true,
+        message: "Classification unavailable — returning fallback",
         processingTimeMs: Date.now() - startTime,
-        data: null,
-      } as ApiResponse<null>);
+        data: { ...FALLBACK_CLASSIFICATION, mode },
+        fallback: true,
+      } as ApiResponse<any>);
     }
   }
 }

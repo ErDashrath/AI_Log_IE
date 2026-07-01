@@ -6,6 +6,7 @@ import {
   circuitBreaker,
   ConsecutiveBreaker,
   ExponentialBackoff,
+  handleWhen,
   handleAll,
   wrap,
 } from "cockatiel";
@@ -39,14 +40,21 @@ export class GeminiAIService implements IAIService {
   private genai: GoogleGenAI;
   private telemetry = new TelemetryService();
 
-  // Cockatiel retry policy: 3 attempts with exponential backoff + jitter
-  private retryPolicy = retry(handleAll, {
-    maxAttempts: 3,
-    backoff: new ExponentialBackoff({
-      initialDelay: 1000,
-      maxDelay: 15000,
+  // Selective retry: only retries on 429 (rate limit) and 5xx errors.
+  // Never retries 400/401/403 — they will never succeed. Per arch §7.2.
+  private retryPolicy = retry(
+    handleWhen((err: any) => {
+      const status = err?.status ?? err?.response?.status;
+      return status === 429 || (typeof status === "number" && status >= 500);
     }),
-  });
+    {
+      maxAttempts: 3,
+      backoff: new ExponentialBackoff({
+        initialDelay: 1000,
+        maxDelay: 15000,
+      }),
+    }
+  );
 
   // Circuit breaker: opens after 5 consecutive failures, probes after 30s
   private breakerPolicy = circuitBreaker(handleAll, {

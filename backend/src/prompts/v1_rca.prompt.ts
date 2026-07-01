@@ -35,7 +35,7 @@ RESPONSE JSON SCHEMA:
       "logEntry": "relevant log entry text",
       "relevance": "why this log entry supports the root cause conclusion"
     }
-  ],
+  ], // NOTE: Include a MAXIMUM of 3 evidence entries to keep the response concise.
   "impact": "Description of user/system impact",
   "recommendation": "Numbered list of specific actions to resolve and prevent recurrence",
   "confidence": number (0-100, how confident are you in this root cause)

@@ -78,8 +78,8 @@ export class LogIngestor {
           skippedCount++;
         }
 
-        // Yield to event loop every 50ms of CPU time (standard frame budget)
-        if (Date.now() - chunkStart >= 50) {
+        // Yield to event loop every 10ms of CPU time (scale-invariant — per arch §4.2)
+        if (Date.now() - chunkStart >= 10) {
           await new Promise<void>((resolve) => setImmediate(resolve));
           chunkStart = Date.now();
         }

@@ -73,7 +73,7 @@ Output: { "logEntry": "[Mon Dec 05 11:34:22 2005] [notice] child pid 1234 exit s
       "category": "<one of the 10 categories>",
       "confidence": <integer 0-100>,
       "severity": "<critical|high|medium|low|info>",
-      "explanation": "<1-2 sentence explanation>"
+      "explanation": "<1-2 sentences providing deep technical insight, potential root cause, or system impact. DO NOT just rephrase the log in English. Explain WHY it happened or what it means for the system>"
     }
   ]
 }

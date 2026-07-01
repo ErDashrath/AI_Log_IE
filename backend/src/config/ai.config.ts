@@ -9,7 +9,7 @@ import { ApiEndpoint } from "../retrieval/IRetrievalFactory";
  */
 export const AI_CONFIG = {
   /** Gemini model identifier */
-  model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
 
   /** Temperature per endpoint */
   temperatures: {
@@ -18,12 +18,12 @@ export const AI_CONFIG = {
     rca: 0.3,             // Inductive reasoning — forming hypotheses from evidence
   } as Record<ApiEndpoint, number>,
 
-  /** Max output tokens per LLM call */
-  completionBudget: 2048,
+  /** Max output tokens per LLM call (4096 for RCA evidence arrays) */
+  completionBudget: 4096,
 
 
-  /** Max logs sent to LLM per request (keep small for speed) */
-  contextBudget: 10,
+  /** Max logs sent to LLM per request (20-log budget per arch §6.3) */
+  contextBudget: 20,
 
 
   /** Max log entries accepted in classification request */

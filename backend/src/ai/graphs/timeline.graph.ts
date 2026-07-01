@@ -9,6 +9,22 @@ import pino from "pino";
 
 const logger = pino({ name: "timeline-graph" });
 
+/**
+ * Extracts a plain string from a LangChain AIMessage content.
+ * Handles both string and array-of-content-blocks formats.
+ */
+function extractContent(content: string | any[]): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block: any) =>
+        typeof block === "string" ? block : block.text ?? JSON.stringify(block)
+      )
+      .join("");
+  }
+  return String(content);
+}
+
 // 1. Define the State
 export const TimelineStateAnnotation = Annotation.Root({
   contextLogs: Annotation<ParsedLog[]>({
@@ -38,7 +54,8 @@ async function generateTimelineNode(state: TimelineState): Promise<Partial<Timel
   try {
   const response = await invokeWithTimeout(llm, prompt, "timeline");
 
-    let rawText = response.content as string;
+    // Normalize content — handles string or array of content blocks
+    let rawText = extractContent(response.content);
 
     // Extract JSON
     const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);

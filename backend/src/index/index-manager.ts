@@ -29,7 +29,6 @@ export class IndexManager implements IIndexManager {
   private componentIndex = new Map<string, number[]>();
   private templateIndex = new Map<string, number[]>();
   private timestampSorted: { lineNum: number; timestamp: Date }[] = [];
-  private allLogs: ParsedLog[] = []; // reference for time-window lookups
   private miniSearchDocs: any[] = [];
 
   private miniSearch: MiniSearch;
@@ -55,9 +54,6 @@ export class IndexManager implements IIndexManager {
 
     // Timestamp sorted list
     this.timestampSorted.push({ lineNum, timestamp: log.timestamp });
-
-    // Keep reference for time-window lookups
-    this.allLogs[lineNum] = log;
 
     // MiniSearch — collect for batch indexing
     this.miniSearchDocs.push({
@@ -136,10 +132,15 @@ export class IndexManager implements IIndexManager {
       };
     }
 
+    // Build a lineNum→timestamp map from timestampSorted (no second array needed)
+    const lineNumToTimestamp = new Map<number, Date>(
+      this.timestampSorted.map((e) => [e.lineNum, e.timestamp])
+    );
+
     // Get error timestamps sorted
     const errorTimestamps = errorLineNums
-      .map((ln) => this.allLogs[ln]?.timestamp)
-      .filter(Boolean)
+      .map((ln) => lineNumToTimestamp.get(ln))
+      .filter((t): t is Date => t !== undefined)
       .sort((a, b) => a.getTime() - b.getTime());
 
     // Sliding window: find the 30-min window with the most errors
@@ -215,10 +216,8 @@ export class IndexManager implements IIndexManager {
     this.componentIndex = new Map();
     this.templateIndex = new Map();
     this.timestampSorted = [];
-    this.allLogs = [];
     this.miniSearchDocs = [];
     this.miniSearch = new MiniSearch({
-
       fields: RETRIEVAL_CONFIG.miniSearch.fields,
       storeFields: RETRIEVAL_CONFIG.miniSearch.storeFields,
       idField: "id",

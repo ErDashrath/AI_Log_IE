@@ -68,7 +68,7 @@ export function getResilientLLM(
   // Gemini primary
   if (geminiKey) {
     const gemini = new ChatGoogleGenerativeAI({
-      modelName: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+      modelName: process.env.GEMINI_MODEL || "gemini-3.5-flash",
       apiKey: geminiKey,
       temperature,
       maxOutputTokens,
@@ -81,6 +81,7 @@ export function getResilientLLM(
         modelName: "llama-3.3-70b-versatile",
         temperature,
         maxTokens: maxOutputTokens,
+        modelKwargs: { response_format: { type: "json_object" } },
       });
 
       logger.info("LLM: Gemini (primary) + Groq (fallback)");
@@ -100,13 +101,14 @@ export function getResilientLLM(
       modelName: "llama-3.3-70b-versatile",
       temperature,
       maxTokens: maxOutputTokens,
+      modelKwargs: { response_format: { type: "json_object" } },
     }) as unknown as BaseChatModel;
   }
 
   // Neither key configured — will fail at invoke() time with a clear error
   logger.error("LLM: No API keys configured. Set GEMINI_API_KEY or GROQ_API_KEY.");
   return new ChatGoogleGenerativeAI({
-    modelName: "gemini-2.0-flash",
+    modelName: "gemini-3.5-flash",
     apiKey: "MISSING",
     temperature,
     maxOutputTokens,
