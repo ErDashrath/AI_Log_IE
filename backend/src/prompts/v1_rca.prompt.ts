@@ -72,7 +72,7 @@ If it changes the conclusion, provide the updated root cause.
 RESPONSE JSON SCHEMA:
 {
   "rootCause": "Updated or confirmed root cause",
-  "evidence": [{ "logEntry": "string", "relevance": "string" }],
+  "evidence": [{ "logEntry": "string", "relevance": "string" }], // NOTE: Include a MAXIMUM of 3 evidence entries to keep the response concise.
   "impact": "Updated impact assessment",
   "recommendation": "Updated recommendations",
   "confidence": number (0-100, updated confidence)

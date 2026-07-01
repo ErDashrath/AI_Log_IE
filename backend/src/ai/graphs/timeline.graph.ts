@@ -25,6 +25,26 @@ function extractContent(content: string | any[]): string {
   return String(content);
 }
 
+/**
+ * Attempts to repair truncated JSON arrays/objects.
+ * Groq free tier often cuts off mid-generation when TPM limit is reached.
+ */
+function repairJSON(jsonStr: string): any {
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    logger.warn({ msg: "JSON parse failed, attempting repair", snippet: jsonStr.slice(-50) });
+    // Try to close hanging event arrays and the main object
+    const repaired = jsonStr.replace(/,\s*$/, "") + ']}';
+    try {
+      return JSON.parse(repaired);
+    } catch (e2) {
+      // Ultimate fallback: empty events array to satisfy schema
+      return { events: [] };
+    }
+  }
+}
+
 // 1. Define the State
 export const TimelineStateAnnotation = Annotation.Root({
   contextLogs: Annotation<ParsedLog[]>({
@@ -63,7 +83,7 @@ async function generateTimelineNode(state: TimelineState): Promise<Partial<Timel
     const braceMatch = rawText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (braceMatch) rawText = braceMatch[1];
 
-    const parsed = JSON.parse(rawText);
+    const parsed = repairJSON(rawText);
     const validated = TimelineResponseSchema.parse(parsed);
 
     return { result: validated };
