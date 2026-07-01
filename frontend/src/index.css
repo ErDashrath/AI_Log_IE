@@ -1160,3 +1160,69 @@ textarea::placeholder { color: var(--text-muted); }
   .chart-label { width: 100px; }
   .confidence-ring { width: 34px; height: 34px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Dark Mode Overrides
+   ═══════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* ── Canvas ────────────────────────────────────────────────────── */
+  --canvas:              #111111;
+  --surface:             #191919;
+  --surface-secondary:   #222222;
+  --surface-inset:       #0A0A0A;
+
+  /* ── Text ──────────────────────────────────────────────────────── */
+  --text-primary:        #F7F6F3;
+  --text-secondary:      #9E9E9E;
+  --text-muted:          #686868;
+  --text-inverse:        #111111;
+
+  /* ── Structural ────────────────────────────────────────────────── */
+  --border:              #333333;
+  --border-focus:        #F7F6F3;
+  --divider:             rgba(255, 255, 255, 0.08);
+
+  /* ── Semantic Accents (Desaturated for Dark Mode) ──────────────── */
+  --accent-red-bg:       rgba(224, 98, 98, 0.15);
+  --accent-red-text:     #F08A8D;
+  --accent-blue-bg:      rgba(74, 158, 222, 0.15);
+  --accent-blue-text:    #8AC4EF;
+  --accent-green-bg:     rgba(87, 166, 95, 0.15);
+  --accent-green-text:   #94D39B;
+  --accent-yellow-bg:    rgba(212, 154, 30, 0.15);
+  --accent-yellow-text:  #F2CD70;
+  --accent-gray-bg:      #2A2A2A;
+  --accent-gray-text:    #B3B3B3;
+
+  /* ── Interactive ───────────────────────────────────────────────── */
+  --action:              #F7F6F3;
+  --action-hover:        #EAEAEA;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Theme Toggle
+   ═══════════════════════════════════════════════════════════════════ */
+.theme-toggle {
+  position: absolute;
+  top: var(--space-xl);
+  right: var(--space-lg);
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color 200ms ease;
+  padding: 4px 8px;
+}
+
+.theme-toggle:hover {
+  color: var(--text-primary);
+}
+
+.app {
+  position: relative; /* Ensure the theme toggle positions correctly */
+}

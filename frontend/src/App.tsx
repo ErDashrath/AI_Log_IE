@@ -681,6 +681,17 @@ function AppContent() {
   const [fSize, setFSize] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   useEffect(() => {
     checkReady().then(setReady).catch(() => setReady({ ready: false }));
   }, []);
@@ -709,6 +720,10 @@ function AppContent() {
 
   return (
     <div className="app">
+      <button className="theme-toggle" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
+        {theme === 'dark' ? 'Light' : 'Dark'}
+      </button>
+
       <header className="header">
         <h1>AI Log Intelligence Engine</h1>
         <p>Upload any log file &middot; Auto-detect format &middot; AI-powered analysis</p>
