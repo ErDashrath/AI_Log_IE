@@ -28,7 +28,9 @@ const LOG_FILE_PATH = process.env.LOG_FILE_PATH || "Apache_2k.log";
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.text({ limit: "50mb", type: "text/plain" }));
-app.use(rateLimiter);
+// Rate limiter applied only to /api routes — /ready and /health are
+// polled frequently by the frontend and must never be rate-limited.
+app.use("/api", rateLimiter);
 
 // --- AI Route Timeout (310s hard limit) ---
 // Ensures the HTTP response is always sent even if LLM calls hang.

@@ -17,7 +17,7 @@ function fmtMs(ms: number): string {
   return (ms / 1000).toFixed(1) + 's';
 }
 
-/** Map category string → CSS class suffix for .cat-badge */
+/** Map category string to CSS class suffix */
 function getCatClass(cat: string): string {
   const c = cat.toLowerCase();
   if (c.includes('worker'))        return 'worker';
@@ -32,26 +32,53 @@ function getCatClass(cat: string): string {
   return 'unknown';
 }
 
-/** Confidence tier for color-coded rings/bars */
+/** Confidence tier */
 function confTier(n: number): 'high' | 'medium' | 'low' {
   if (n >= 80) return 'high';
   if (n >= 60) return 'medium';
   return 'low';
 }
 
+// ── Scroll Entry Hook ──────────────────────────────────────────────
+function useScrollEntry(): React.RefObject<HTMLDivElement> {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          node.classList.add('visible');
+          observer.unobserve(node);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+
+/** Wrapper component for scroll-entry animation */
+function ScrollEntry({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const ref = useScrollEntry();
+  return <div ref={ref} className={`scroll-entry ${className}`}>{children}</div>;
+}
+
 // ── SVG Confidence Ring ────────────────────────────────────────────
 function ConfidenceRing({ value }: { value: number }) {
-  const r = 18;
+  const r = 16;
   const circ = 2 * Math.PI * r;
   const offset = circ - (value / 100) * circ;
   const tier = confTier(value);
   return (
     <div className="confidence-ring">
-      <svg width="44" height="44" viewBox="0 0 44 44">
-        <circle className="conf-track" cx="22" cy="22" r={r} />
+      <svg width="40" height="40" viewBox="0 0 40 40">
+        <circle className="conf-track" cx="20" cy="20" r={r} />
         <circle
           className={`conf-fill ${tier}`}
-          cx="22" cy="22" r={r}
+          cx="20" cy="20" r={r}
           strokeDasharray={circ}
           strokeDashoffset={offset}
         />
@@ -63,18 +90,18 @@ function ConfidenceRing({ value }: { value: number }) {
 
 // ── Severity Pill ──────────────────────────────────────────────────
 const SEV_LABELS: Record<Severity, string> = {
-  critical: '🔴 Critical',
-  high: '🟠 High',
-  medium: '🟡 Medium',
-  low: '🔵 Low',
-  info: '🟢 Info',
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+  info: 'Info',
 };
 
 function SeverityPill({ sev, count }: { sev: Severity; count: number }) {
   return (
     <div className={`sev-pill ${sev}`}>
       <span className="sev-dot" />
-      {SEV_LABELS[sev].split(' ')[1]} <strong>{count}</strong>
+      {SEV_LABELS[sev]} <strong>{count}</strong>
     </div>
   );
 }
@@ -109,14 +136,14 @@ function ClassificationCard({ item, index }: { item: any; index: number }) {
   const tier = confTier(item.confidence);
 
   return (
-    <div className={`classification-card sev-${sev}`}>
+    <div className={`classification-card sev-${sev}`} style={{ '--index': index } as React.CSSProperties}>
       <div className="card-top">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card-badges">
             <span className="card-index">#{index + 1}</span>
             <span className={`cat-badge ${getCatClass(item.category)}`}>{item.category}</span>
-            <span className={`sev-indicator`}>
-              <span className={`sev-dot sev-pill ${sev}`} style={{ width: 7, height: 7, display: 'inline-block', borderRadius: '50%', background: sev === 'critical' ? '#ef4444' : sev === 'high' ? '#f97316' : sev === 'medium' ? '#f59e0b' : sev === 'info' ? '#22c55e' : '#3b82f6' }} />
+            <span className="sev-indicator">
+              <span className="sev-dot" style={{ background: sev === 'critical' ? 'var(--accent-red-text)' : sev === 'high' ? 'var(--accent-yellow-text)' : sev === 'medium' ? 'var(--accent-yellow-text)' : sev === 'info' ? 'var(--accent-green-text)' : 'var(--accent-blue-text)' }} />
               {sev}
             </span>
           </div>
@@ -134,7 +161,7 @@ function ClassificationCard({ item, index }: { item: any; index: number }) {
 
       {item.logEntry?.length > 120 && (
         <button className="expand-btn" onClick={() => setExpanded(!expanded)}>
-          {expanded ? '▲ Show less' : '▼ Show full log'}
+          {expanded ? 'Show less' : 'Show full log'}
         </button>
       )}
 
@@ -172,46 +199,47 @@ function LogViewer({ ok, ready }: { ok: boolean, ready: any }) {
   if (!ok || logs.length === 0) return null;
 
   return (
-    <div className="card" style={{ marginTop: 24 }}>
-      <h3 className="card-title">📄 Raw Log Preview</h3>
-      <p className="card-desc">System-wide parsed dataset (showing 100 per page).</p>
-      
-      <div style={{ background: '#0d1117', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-        <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Page {page} of {totalPages}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={page === 1 || loading} onClick={() => setPage(p => p - 1)}>← Prev</button>
-            <button className="btn" style={{ padding: '4px 10px', fontSize: '0.8rem' }} disabled={page === totalPages || loading} onClick={() => setPage(p => p + 1)}>Next →</button>
+    <ScrollEntry>
+      <div className="card" style={{ marginTop: 24 }}>
+        <h3 className="card-title">Raw Log Preview</h3>
+        <p className="card-desc">System-wide parsed dataset, showing 100 entries per page.</p>
+        
+        <div style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+          <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Page {page} of {totalPages}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} disabled={page === 1 || loading} onClick={() => setPage(p => p - 1)}>Prev</button>
+              <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} disabled={page === totalPages || loading} onClick={() => setPage(p => p + 1)}>Next</button>
+            </div>
+          </div>
+          <div style={{ padding: 12, maxHeight: 500, overflowY: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            {loading ? (
+               <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner large" /> Loading...</div>
+            ) : (
+              (logs || []).map((log: any, i: number) => {
+                let timeStr = String(log.timestamp || '');
+                try {
+                  if (log.timestamp) {
+                     const d = new Date(log.timestamp);
+                     if (!isNaN(d.getTime())) {
+                       timeStr = d.toISOString().replace('T', ' ').substring(0, 19);
+                     }
+                  }
+                } catch(e) {}
+                
+                return (
+                <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+                  <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{timeStr}</span>
+                  <span style={{ width: 60, flexShrink: 0, color: log.severity === 'error' || log.severity === 'crit' ? 'var(--accent-red-text)' : log.severity === 'warn' || log.severity === 'warning' ? 'var(--accent-yellow-text)' : log.severity === 'notice' ? 'var(--accent-blue-text)' : 'var(--text-muted)' }}>[{log.severity || 'info'}]</span>
+                  <span style={{ width: 100, flexShrink: 0, color: 'var(--accent-red-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.component || '-'}</span>
+                  <span style={{ wordBreak: 'break-all' }}>{log.message}</span>
+                </div>
+              )})
+            )}
           </div>
         </div>
-        <div style={{ padding: 12, maxHeight: 500, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.75rem', color: '#c9d1d9' }}>
-          {loading ? (
-             <div style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /> Loading...</div>
-          ) : (
-            (logs || []).map((log: any, i: number) => {
-              // Safely format the date to prevent React crashes on invalid timestamps
-              let timeStr = String(log.timestamp || '');
-              try {
-                if (log.timestamp) {
-                   const d = new Date(log.timestamp);
-                   if (!isNaN(d.getTime())) {
-                     timeStr = d.toISOString().replace('T', ' ').substring(0, 19);
-                   }
-                }
-              } catch(e) {}
-              
-              return (
-              <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid #30363d', display: 'flex', gap: 10 }}>
-                <span style={{ color: '#8b949e', whiteSpace: 'nowrap' }}>{timeStr}</span>
-                <span style={{ width: 60, flexShrink: 0, color: log.severity === 'error' || log.severity === 'crit' ? '#ff7b72' : log.severity === 'warn' || log.severity === 'warning' ? '#d2a8ff' : log.severity === 'notice' ? '#79c0ff' : '#a5d6ff' }}>[{log.severity || 'info'}]</span>
-                <span style={{ width: 100, flexShrink: 0, color: '#ff7b72', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.component || '-'}</span>
-                <span style={{ wordBreak: 'break-all' }}>{log.message}</span>
-              </div>
-            )})
-          )}
-        </div>
       </div>
-    </div>
+    </ScrollEntry>
   );
 }
 
@@ -221,48 +249,57 @@ function UploadTab({
 }: any) {
   return (
     <div>
-      <div className="card">
-        <h3 className="card-title">Upload Log File</h3>
-        <p className="card-desc">Drag & drop any log file — Apache, NGINX, Syslog, or custom format. Auto-detected.</p>
-        <div
-          className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
-          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]); }}
-          onClick={() => fileRef.current?.click()}
-        >
-          <input ref={fileRef} type="file" accept=".log,.txt,.csv,.json" onChange={e => { if (e.target.files?.[0]) doUpload(e.target.files[0]); }} style={{ display: 'none' }} />
-          {loading
-            ? <div className="drop-zone-content"><span className="spinner large" /><p style={{ color: 'var(--text-muted)', marginTop: 12 }}>{progress}</p></div>
-            : <div className="drop-zone-content">
-                <div className="drop-zone-icon">📄</div>
-                <p className="drop-zone-title">Drop your log file here, or <span className="browse-link">Browse</span></p>
-                <p className="drop-zone-hint">Supports .log .txt .csv .json — any format, any size</p>
+      <ScrollEntry>
+        <div className="card">
+          <h3 className="card-title">Upload Log File</h3>
+          <p className="card-desc">Drag and drop any log file — Apache, NGINX, Syslog, or custom format. Auto-detected.</p>
+          <div
+            className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]); }}
+            onClick={() => fileRef.current?.click()}
+          >
+            <input ref={fileRef} type="file" accept=".log,.txt,.csv,.json" onChange={e => { if (e.target.files?.[0]) doUpload(e.target.files[0]); }} style={{ display: 'none' }} />
+            {loading
+              ? <div className="drop-zone-content"><span className="spinner large" /><p style={{ color: 'var(--text-muted)', marginTop: 12 }}>{progress}</p></div>
+              : <div className="drop-zone-content">
+                  <div className="drop-zone-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>
+                  </div>
+                  <p className="drop-zone-title">Drop your log file here, or <span className="browse-link">browse</span></p>
+                  <p className="drop-zone-hint">Supports .log .txt .csv .json — any format, any size</p>
+                </div>
+            }
+          </div>
+          {fName && !loading && (
+            <div className="uploaded-file">
+              <div className="file-info">
+                <span className="file-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <div><div className="file-name">{fName}</div><div className="file-size">{fmtBytes(fSize)}</div></div>
               </div>
-          }
-        </div>
-        {fName && !loading && (
-          <div className="uploaded-file">
-            <div className="file-info">
-              <span className="file-icon">📄</span>
-              <div><div className="file-name">{fName}</div><div className="file-size">{fmtBytes(fSize)}</div></div>
+              {uploadResult?.success && <span className="file-status success">Processed</span>}
+              {uploadResult && !uploadResult.success && <span className="file-status error">Failed</span>}
             </div>
-            {uploadResult?.success && <span className="file-status success">✓ Processed</span>}
-            {uploadResult && !uploadResult.success && <span className="file-status error">✗ Failed</span>}
-          </div>
-        )}
-      </div>
-      {uploadResult?.success && (
-        <div className="card success-card">
-          <h3 className="card-title">✅ File Processed</h3>
-          <div className="stats-grid">
-            <div className="stat-item"><div className="stat-value">{uploadResult.data?.logsIngested}</div><div className="stat-label">Logs</div></div>
-            <div className="stat-item"><div className="stat-value">{uploadResult.data?.detectedFormat}</div><div className="stat-label">Format</div></div>
-            <div className="stat-item"><div className="stat-value">{uploadResult.data?.stats?.errorCount}</div><div className="stat-label">Errors</div></div>
-            <div className="stat-item"><div className="stat-value">{uploadResult.data?.stats?.uniqueTemplates}</div><div className="stat-label">Templates</div></div>
-          </div>
-          <p className="card-desc" style={{ marginTop: 16 }}>✨ Ready! Switch to the Classify, Timeline, or Root Cause tabs.</p>
+          )}
         </div>
+      </ScrollEntry>
+
+      {uploadResult?.success && (
+        <ScrollEntry>
+          <div className="card success-card">
+            <h3 className="card-title">File Processed</h3>
+            <div className="stats-grid">
+              <div className="stat-item"><div className="stat-value">{uploadResult.data?.logsIngested}</div><div className="stat-label">Logs</div></div>
+              <div className="stat-item"><div className="stat-value">{uploadResult.data?.detectedFormat}</div><div className="stat-label">Format</div></div>
+              <div className="stat-item"><div className="stat-value">{uploadResult.data?.stats?.errorCount}</div><div className="stat-label">Errors</div></div>
+              <div className="stat-item"><div className="stat-value">{uploadResult.data?.stats?.uniqueTemplates}</div><div className="stat-label">Templates</div></div>
+            </div>
+            <p className="card-desc" style={{ marginTop: 16 }}>Ready for analysis. Switch to the Classify, Timeline, or Root Cause tabs.</p>
+          </div>
+        </ScrollEntry>
       )}
       
       {uploadResult?.success && (
@@ -321,138 +358,148 @@ function ClassificationTab({ ok, ready }: { ok: boolean; ready: any }) {
   return (
     <div>
       {/* Input Panel */}
-      <div className="card">
-        <h3 className="card-title">🏷️ Log Classification</h3>
-        <p className="card-desc">
-          Classify Apache log entries into operational categories using AI.
-          {!ok && <span style={{ color: 'var(--warning)' }}> ⚠️ Upload a file first to use Auto mode.</span>}
-        </p>
+      <ScrollEntry>
+        <div className="card">
+          <h3 className="card-title">Log Classification</h3>
+          <p className="card-desc">
+            Classify Apache log entries into operational categories using AI.
+            {!ok && <span style={{ color: 'var(--accent-yellow-text)' }}> Upload a file first to use Auto mode.</span>}
+          </p>
 
-        {/* Mode Toggle */}
-        <div className="mode-toggle">
-          <button className={`mode-btn ${mode === 'auto' ? 'active' : ''}`} onClick={() => setMode('auto')}>
-            🔄 Auto — from uploaded file
-          </button>
-          <button className={`mode-btn ${mode === 'manual' ? 'active' : ''}`} onClick={() => setMode('manual')}>
-            ✏️ Manual — paste logs
-          </button>
-        </div>
-
-        {mode === 'auto' && (
-          <div style={{ padding: '10px 14px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.83rem', color: 'var(--text-secondary)' }}>
-            {ok
-              ? <>📊 <strong style={{ color: 'var(--success)' }}>{ready?.logsIngested}</strong> logs loaded from <strong>{ready?.detectedFormat}</strong> file. Top anomalies will be classified.</>
-              : <span style={{ color: 'var(--text-muted)' }}>No file loaded. Upload a log file on the Upload tab first.</span>
-            }
-          </div>
-        )}
-
-        {mode === 'manual' && (
-          <div>
-            <label className="input-label">Log Entries (one per line)</label>
-            <textarea
-              value={manualInput}
-              onChange={e => setManualInput(e.target.value)}
-              placeholder="Paste Apache log entries here — one entry per line..."
-              style={{ minHeight: 130 }}
-            />
-            <p className="input-hint">Max 50 log entries. Multi-line entries should be on a single line.</p>
-          </div>
-        )}
-
-        <div className="btn-row">
-          <button
-            id="classify-btn"
-            className="btn btn-primary"
-            onClick={classify}
-            disabled={loading || (mode === 'auto' && !ok)}
-          >
-            {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)…</> : '🏷️ Classify'}
-
-          </button>
-          {result && (
-            <button className="btn-export" onClick={exportResults}>
-              ⬇ Export JSON
+          {/* Mode Toggle */}
+          <div className="mode-toggle">
+            <button className={`mode-btn ${mode === 'auto' ? 'active' : ''}`} onClick={() => setMode('auto')}>
+              Auto — from uploaded file
             </button>
+            <button className={`mode-btn ${mode === 'manual' ? 'active' : ''}`} onClick={() => setMode('manual')}>
+              Manual — paste logs
+            </button>
+          </div>
+
+          {mode === 'auto' && (
+            <div style={{ padding: '10px 14px', background: 'var(--surface-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              {ok
+                ? <><strong style={{ color: 'var(--accent-green-text)' }}>{ready?.logsIngested}</strong> logs loaded from <strong>{ready?.detectedFormat}</strong> file. Top anomalies will be classified.</>
+                : <span style={{ color: 'var(--text-muted)' }}>No file loaded. Upload a log file on the Upload tab first.</span>
+              }
+            </div>
           )}
+
+          {mode === 'manual' && (
+            <div>
+              <label className="input-label">Log Entries (one per line)</label>
+              <textarea
+                value={manualInput}
+                onChange={e => setManualInput(e.target.value)}
+                placeholder="Paste Apache log entries here — one entry per line..."
+                style={{ minHeight: 130 }}
+              />
+              <p className="input-hint">Max 50 log entries. Multi-line entries should be on a single line.</p>
+            </div>
+          )}
+
+          <div className="btn-row">
+            <button
+              id="classify-btn"
+              className="btn btn-primary"
+              onClick={classify}
+              disabled={loading || (mode === 'auto' && !ok)}
+            >
+              {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)...</> : 'Classify'}
+
+            </button>
+            {result && (
+              <button className="btn-export" onClick={exportResults}>
+                Export JSON
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </ScrollEntry>
 
       {/* Error state */}
       {error && (
-        <div className="fallback-banner">⚠️ {error}</div>
+        <div className="fallback-banner">{error}</div>
       )}
 
       {/* Results */}
       {result && !error && (
         <>
           {/* Summary Strip */}
-          <div className="classify-summary">
-            <div className="summary-stat">
-              <span className="summary-stat-val">{result.data?.totalClassified ?? classifications.length}</span>
-              <span className="summary-stat-label">Classified</span>
+          <ScrollEntry>
+            <div className="classify-summary">
+              <div className="summary-stat">
+                <span className="summary-stat-val">{result.data?.totalClassified ?? classifications.length}</span>
+                <span className="summary-stat-label">Classified</span>
+              </div>
+              <div className="summary-divider" />
+              <div className="summary-stat">
+                <span className="summary-stat-val">{fmtMs(result.processingTimeMs)}</span>
+                <span className="summary-stat-label">Time</span>
+              </div>
+              <div className="summary-divider" />
+              <div className="summary-stat">
+                <span className="summary-stat-val">{Object.keys(categorySummary).length}</span>
+                <span className="summary-stat-label">Categories</span>
+              </div>
+              <div className="summary-divider" />
+              <span className={`summary-badge ${result.data?.mode ?? 'auto'}`}>
+                {result.data?.mode === 'manual' ? 'Manual' : 'Auto'}
+              </span>
+              {result.data?.fallback && <span className="summary-badge fallback">Fallback</span>}
             </div>
-            <div className="summary-divider" />
-            <div className="summary-stat">
-              <span className="summary-stat-val">{fmtMs(result.processingTimeMs)}</span>
-              <span className="summary-stat-label">Time</span>
-            </div>
-            <div className="summary-divider" />
-            <div className="summary-stat">
-              <span className="summary-stat-val">{Object.keys(categorySummary).length}</span>
-              <span className="summary-stat-label">Categories</span>
-            </div>
-            <div className="summary-divider" />
-            <span className={`summary-badge ${result.data?.mode ?? 'auto'}`}>
-              {result.data?.mode === 'manual' ? '✏️ Manual' : '🔄 Auto'}
-            </span>
-            {result.data?.fallback && <span className="summary-badge fallback">⚠️ Fallback</span>}
-          </div>
+          </ScrollEntry>
 
           {/* Fallback banner */}
           {result.data?.fallback && (
             <div className="fallback-banner">
-              ⚠️ {result.data.fallbackReason ?? 'AI service temporarily unavailable.'}
+              {result.data.fallbackReason ?? 'AI service temporarily unavailable.'}
             </div>
           )}
 
           {/* Severity Distribution */}
           {classifications.length > 0 && (
-            <div style={{ marginBottom: 18 }}>
-              <div className="section-header">
-                <span className="section-title">Severity Distribution</span>
+            <ScrollEntry>
+              <div style={{ marginBottom: 18 }}>
+                <div className="section-header">
+                  <span className="section-title">Severity Distribution</span>
+                </div>
+                <div className="severity-strip">
+                  {(['critical', 'high', 'medium', 'low', 'info'] as Severity[]).map(s =>
+                    (severityCounts[s] ?? 0) > 0
+                      ? <SeverityPill key={s} sev={s} count={severityCounts[s]!} />
+                      : null
+                  )}
+                </div>
               </div>
-              <div className="severity-strip">
-                {(['critical', 'high', 'medium', 'low', 'info'] as Severity[]).map(s =>
-                  (severityCounts[s] ?? 0) > 0
-                    ? <SeverityPill key={s} sev={s} count={severityCounts[s]!} />
-                    : null
-                )}
-              </div>
-            </div>
+            </ScrollEntry>
           )}
 
           {/* Category Chart */}
           {Object.keys(categorySummary).length > 0 && (
-            <CategoryChart summary={categorySummary} />
+            <ScrollEntry>
+              <CategoryChart summary={categorySummary} />
+            </ScrollEntry>
           )}
 
           {/* Classification Cards */}
           {classifications.length > 0 ? (
-            <div>
-              <div className="section-header">
-                <span className="section-title">Classifications</span>
-                <span className="count-badge">{classifications.length} entries</span>
+            <ScrollEntry>
+              <div>
+                <div className="section-header">
+                  <span className="section-title">Classifications</span>
+                  <span className="count-badge">{classifications.length} entries</span>
+                </div>
+                <div className="classification-list">
+                  {(classifications || []).map((c: any, i: number) => (
+                    <ClassificationCard key={i} item={c} index={i} />
+                  ))}
+                </div>
               </div>
-              <div className="classification-list">
-                {(classifications || []).map((c: any, i: number) => (
-                  <ClassificationCard key={i} item={c} index={i} />
-                ))}
-              </div>
-            </div>
+            </ScrollEntry>
           ) : (
             <div className="empty-state">
-              <div className="empty-state-icon">🏷️</div>
+              <div className="empty-state-icon">—</div>
               <div className="empty-state-text">No classifications returned.</div>
             </div>
           )}
@@ -469,30 +516,34 @@ function TimelineTab({ ok }: { ok: boolean }) {
 
   return (
     <div>
-      <div className="card">
-        <h3 className="card-title">📅 Incident Timeline</h3>
-        <p className="card-desc">Auto-detects the highest error-density window and generates a structured event timeline.{!ok && <span style={{ color: 'var(--warning)' }}> ⚠️ Upload a file first.</span>}</p>
-        <div className="btn-row">
-          <button className="btn btn-primary" onClick={async () => { setLoading(true); setTlResult(null); try { setTlResult(await generateTimeline()); } catch (e) { setTlResult({ success: false, message: String(e) }); } setLoading(false); }} disabled={loading || !ok}>
-            {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)…</> : '📅 Generate Timeline'}
+      <ScrollEntry>
+        <div className="card">
+          <h3 className="card-title">Incident Timeline</h3>
+          <p className="card-desc">Auto-detects the highest error-density window and generates a structured event timeline.{!ok && <span style={{ color: 'var(--accent-yellow-text)' }}> Upload a file first.</span>}</p>
+          <div className="btn-row">
+            <button className="btn btn-primary" onClick={async () => { setLoading(true); setTlResult(null); try { setTlResult(await generateTimeline()); } catch (e) { setTlResult({ success: false, message: String(e) }); } setLoading(false); }} disabled={loading || !ok}>
+              {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)...</> : 'Generate Timeline'}
 
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
+      </ScrollEntry>
       {tlResult?.data?.events && (
-        <div className="timeline-container">
-          <div className="timeline-line" />
-          {(tlResult.data.events || []).map((e: any, i: number) => (
-            <div key={i} className="timeline-event">
-              <div className="timeline-time">{e.timestamp}</div>
-              <div className="timeline-title">{e.title}</div>
-              <div className="timeline-summary">{e.summary}</div>
-              {e.logReferences?.length > 0 && <div className="log-refs">📎 Lines: {e.logReferences.join(', ')}</div>}
-            </div>
-          ))}
-        </div>
+        <ScrollEntry>
+          <div className="timeline-container">
+            <div className="timeline-line" />
+            {(tlResult.data.events || []).map((e: any, i: number) => (
+              <div key={i} className="timeline-event">
+                <div className="timeline-time">{e.timestamp}</div>
+                <div className="timeline-title">{e.title}</div>
+                <div className="timeline-summary">{e.summary}</div>
+                {e.logReferences?.length > 0 && <div className="log-refs">Lines: {e.logReferences.join(', ')}</div>}
+              </div>
+            ))}
+          </div>
+        </ScrollEntry>
       )}
-      {tlResult?.data?.fallback && <div className="fallback-banner">⚠️ {tlResult.data.fallbackReason}</div>}
+      {tlResult?.data?.fallback && <div className="fallback-banner">{tlResult.data.fallbackReason}</div>}
     </div>
   );
 }
@@ -505,41 +556,45 @@ function RCATab({ ok }: { ok: boolean }) {
 
   return (
     <div>
-      <div className="card">
-        <h3 className="card-title">🔬 Root Cause Analysis</h3>
-        <p className="card-desc">Multi-step AI reasoning over your log file. Leave empty to auto-detect the primary incident.{!ok && <span style={{ color: 'var(--warning)' }}> ⚠️ Upload a file first.</span>}</p>
-        <textarea value={rcaQuery} onChange={e => setRcaQuery(e.target.value)} placeholder="Optional: describe what you want to investigate, e.g. 'worker crash' or 'auth failure'..." style={{ minHeight: 70 }} />
-        <div className="btn-row">
-          <button className="btn btn-primary" onClick={async () => { setLoading(true); setRcaResult(null); try { setRcaResult(await analyzeRootCause(rcaQuery || undefined)); } catch (e) { setRcaResult({ success: false, message: String(e) }); } setLoading(false); }} disabled={loading || !ok}>
-            {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)…</> : '🔬 Analyze Root Cause'}
+      <ScrollEntry>
+        <div className="card">
+          <h3 className="card-title">Root Cause Analysis</h3>
+          <p className="card-desc">Multi-step AI reasoning over your log file. Leave empty to auto-detect the primary incident.{!ok && <span style={{ color: 'var(--accent-yellow-text)' }}> Upload a file first.</span>}</p>
+          <textarea value={rcaQuery} onChange={e => setRcaQuery(e.target.value)} placeholder="Optional: describe what you want to investigate, e.g. 'worker crash' or 'auth failure'..." style={{ minHeight: 70 }} />
+          <div className="btn-row">
+            <button className="btn btn-primary" onClick={async () => { setLoading(true); setRcaResult(null); try { setRcaResult(await analyzeRootCause(rcaQuery || undefined)); } catch (e) { setRcaResult({ success: false, message: String(e) }); } setLoading(false); }} disabled={loading || !ok}>
+              {loading ? <><span className="spinner" /> Waiting for AI response (up to 5m)...</> : 'Analyze Root Cause'}
 
-          </button>
-        </div>
-      </div>
-      {rcaResult?.data && !rcaResult.data.fallback && (
-        <div className="result-section">
-          <div className="result-meta"><span>⏱️ {fmtMs(rcaResult.processingTimeMs)}</span><span>Confidence: {rcaResult.data.confidence}%</span></div>
-          <div className="rca-section"><div className="rca-label">Root Cause</div><div className="rca-value highlight">{rcaResult.data.rootCause}</div></div>
-          <div className="rca-section"><div className="rca-label">Impact</div><div className="rca-value">{rcaResult.data.impact}</div></div>
-          <div className="rca-section"><div className="rca-label">Recommendation</div><div className="rca-value">{rcaResult.data.recommendation}</div></div>
-          {rcaResult.data.evidence?.length > 0 && (
-            <div className="rca-section">
-              <div className="rca-label">Evidence ({rcaResult.data.evidence.length})</div>
-              {(rcaResult.data.evidence || []).map((e: any, i: number) => (
-                <div key={i} className="evidence-item"><div className="evidence-log">{e.logEntry}</div><div className="evidence-relevance">→ {e.relevance}</div></div>
-              ))}
-            </div>
-          )}
-          <div className="rca-section">
-            <div className="rca-label">Confidence</div>
-            <div className="confidence-row">
-              <div className="confidence-bar"><div className="confidence-fill" style={{ width: `${rcaResult.data.confidence}%` }} /></div>
-              <span className="confidence-value">{rcaResult.data.confidence}%</span>
-            </div>
+            </button>
           </div>
         </div>
+      </ScrollEntry>
+      {rcaResult?.data && !rcaResult.data.fallback && (
+        <ScrollEntry>
+          <div className="result-section">
+            <div className="result-meta"><span>{fmtMs(rcaResult.processingTimeMs)}</span><span>Confidence: {rcaResult.data.confidence}%</span></div>
+            <div className="rca-section"><div className="rca-label">Root Cause</div><div className="rca-value highlight">{rcaResult.data.rootCause}</div></div>
+            <div className="rca-section"><div className="rca-label">Impact</div><div className="rca-value">{rcaResult.data.impact}</div></div>
+            <div className="rca-section"><div className="rca-label">Recommendation</div><div className="rca-value">{rcaResult.data.recommendation}</div></div>
+            {rcaResult.data.evidence?.length > 0 && (
+              <div className="rca-section">
+                <div className="rca-label">Evidence ({rcaResult.data.evidence.length})</div>
+                {(rcaResult.data.evidence || []).map((e: any, i: number) => (
+                  <div key={i} className="evidence-item"><div className="evidence-log">{e.logEntry}</div><div className="evidence-relevance">{e.relevance}</div></div>
+                ))}
+              </div>
+            )}
+            <div className="rca-section">
+              <div className="rca-label">Confidence</div>
+              <div className="confidence-row">
+                <div className="confidence-bar"><div className="confidence-fill" style={{ width: `${rcaResult.data.confidence}%` }} /></div>
+                <span className="confidence-value">{rcaResult.data.confidence}%</span>
+              </div>
+            </div>
+          </div>
+        </ScrollEntry>
       )}
-      {rcaResult?.data?.fallback && <div className="fallback-banner">⚠️ AI service temporarily unavailable.</div>}
+      {rcaResult?.data?.fallback && <div className="fallback-banner">AI service temporarily unavailable.</div>}
     </div>
   );
 }
@@ -566,7 +621,7 @@ function DashboardTab({ ok, ready }: { ok: boolean; ready: any }) {
   }, [ok, ready?.logsIngested]);
 
   if (!ok) {
-    return <div className="card"><h3 className="card-title">🌐 Global Dashboard</h3><p className="card-desc"><span style={{ color: 'var(--warning)' }}>⚠️ Upload a file first.</span></p></div>;
+    return <div className="card"><h3 className="card-title">Global Dashboard</h3><p className="card-desc"><span style={{ color: 'var(--accent-yellow-text)' }}>Upload a file first.</span></p></div>;
   }
 
   if (loading) {
@@ -574,38 +629,40 @@ function DashboardTab({ ok, ready }: { ok: boolean; ready: any }) {
   }
 
   if (error) {
-    return <div className="card"><div className="fallback-banner">⚠️ {error}</div></div>;
+    return <div className="card"><div className="fallback-banner">{error}</div></div>;
   }
 
   if (!stats) return null;
 
   return (
     <div>
-      <div className="card">
-        <h3 className="card-title">🌐 Global Dashboard</h3>
-        <p className="card-desc">System-wide analysis of all {stats.totalLogs} logs based on the parsing engine.</p>
-        
-        <div className="stats-grid" style={{ marginBottom: 20 }}>
-          <div className="stat-item"><div className="stat-value">{stats.totalLogs}</div><div className="stat-label">Total Logs</div></div>
-          {stats.timeRange && (
-            <div className="stat-item" style={{ gridColumn: 'span 2' }}>
-              <div className="stat-value" style={{ fontSize: '1rem', marginTop: 4 }}>
-                {new Date(stats.timeRange.start).toLocaleString()} — {new Date(stats.timeRange.end).toLocaleString()}
+      <ScrollEntry>
+        <div className="card">
+          <h3 className="card-title">Global Dashboard</h3>
+          <p className="card-desc">System-wide analysis of all {stats.totalLogs} logs based on the parsing engine.</p>
+          
+          <div className="stats-grid" style={{ marginBottom: 20 }}>
+            <div className="stat-item"><div className="stat-value">{stats.totalLogs}</div><div className="stat-label">Total Logs</div></div>
+            {stats.timeRange && (
+              <div className="stat-item" style={{ gridColumn: 'span 2' }}>
+                <div className="stat-value" style={{ fontSize: '0.85rem', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                  {new Date(stats.timeRange.start).toLocaleString()} — {new Date(stats.timeRange.end).toLocaleString()}
+                </div>
+                <div className="stat-label">Time Range</div>
               </div>
-              <div className="stat-label">Time Range</div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <div className="section-header"><span className="section-title">Severity Distribution</span></div>
-        <div className="severity-strip" style={{ marginBottom: 20 }}>
-          {Object.entries(stats.severityDistribution || {}).map(([sev, count]: any) => (
-             <SeverityPill key={sev} sev={(sev === 'warning' || sev === 'warn' ? 'high' : sev === 'crit' || sev === 'error' ? 'critical' : sev === 'notice' ? 'info' : sev === 'unknown' ? 'low' : sev) as Severity} count={count} />
-          ))}
-        </div>
+          <div className="section-header"><span className="section-title">Severity Distribution</span></div>
+          <div className="severity-strip" style={{ marginBottom: 20 }}>
+            {Object.entries(stats.severityDistribution || {}).map(([sev, count]: any) => (
+               <SeverityPill key={sev} sev={(sev === 'warning' || sev === 'warn' ? 'high' : sev === 'crit' || sev === 'error' ? 'critical' : sev === 'notice' ? 'info' : sev === 'unknown' ? 'low' : sev) as Severity} count={count} />
+            ))}
+          </div>
 
-        <CategoryChart title="Top Components" summary={Object.fromEntries((stats.topComponents || []).map((c: any) => [c.name || 'Unknown', c.count]))} />
-      </div>
+          <CategoryChart title="Top Components" summary={Object.fromEntries((stats.topComponents || []).map((c: any) => [c.name || 'Unknown', c.count]))} />
+        </div>
+      </ScrollEntry>
     </div>
   );
 }
@@ -625,15 +682,14 @@ function AppContent() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const poll = async () => { try { setReady(await checkReady()); } catch { setReady({ ready: false }); } };
-    poll(); const i = setInterval(poll, 5000); return () => clearInterval(i);
+    checkReady().then(setReady).catch(() => setReady({ ready: false }));
   }, []);
 
   const doUpload = useCallback(async (file: File) => {
-    setLoading(true); setUploadResult(null); setProgress('Reading…'); setFName(file.name); setFSize(file.size);
+    setLoading(true); setUploadResult(null); setProgress('Reading file...'); setFName(file.name); setFSize(file.size);
     try {
       const text = await file.text();
-      setProgress(`Uploading ${fmtBytes(file.size)}…`);
+      setProgress(`Uploading ${fmtBytes(file.size)}...`);
       const r = await uploadLogFile(text);
       setUploadResult(r); setProgress('');
       if (r.success) setReady(await checkReady());
@@ -644,18 +700,18 @@ function AppContent() {
   const ok = ready?.ready === true;
 
   const TAB_LABELS: Record<Tab, string> = {
-    upload: '📤 Upload',
-    dashboard: '🌐 Dashboard',
-    classification: '🏷️ Classify',
-    timeline: '📅 Timeline',
-    rca: '🔬 Root Cause',
+    upload: 'Upload',
+    dashboard: 'Dashboard',
+    classification: 'Classify',
+    timeline: 'Timeline',
+    rca: 'Root Cause',
   };
 
   return (
     <div className="app">
       <header className="header">
-        <h1>🔍 AI Log Intelligence Engine</h1>
-        <p>Upload any log file • Auto-detect format • AI-powered analysis</p>
+        <h1>AI Log Intelligence Engine</h1>
+        <p>Upload any log file &middot; Auto-detect format &middot; AI-powered analysis</p>
       </header>
 
       <div className="status-bar">
@@ -664,9 +720,9 @@ function AppContent() {
           {ok ? 'Engine Ready' : 'Waiting for file'}
         </span>
         {ok && <>
-          <span className="status-chip ready">📊 {ready.logsIngested} logs</span>
-          <span className="status-chip ready">📁 {ready.detectedFormat}</span>
-          <span className="status-chip info-chip">⚠️ {ready.stats?.errorCount} errors</span>
+          <span className="status-chip ready">{ready.logsIngested} logs</span>
+          <span className="status-chip ready">{ready.detectedFormat}</span>
+          <span className="status-chip info-chip">{ready.stats?.errorCount} errors</span>
         </>}
       </div>
 
@@ -711,12 +767,12 @@ class ErrorBoundary extends React.Component<{children: any}, {hasError: boolean,
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 40, color: '#ff7b72', fontFamily: 'monospace' }}>
-          <h2>💥 Fatal React Crash</h2>
-          <pre style={{ background: '#0d1117', padding: 20, border: '1px solid #ff7b72', borderRadius: 8, whiteSpace: 'pre-wrap' }}>
+        <div style={{ padding: 40, color: 'var(--accent-red-text)', fontFamily: 'var(--font-mono)' }}>
+          <h2 style={{ fontFamily: 'var(--font-sans)', fontWeight: 600, marginBottom: 16 }}>Fatal Application Error</h2>
+          <pre style={{ background: 'var(--surface-secondary)', padding: 20, border: '1px solid var(--border)', borderRadius: 'var(--radius)', whiteSpace: 'pre-wrap', fontSize: '0.8rem', color: 'var(--text-primary)' }}>
             {String(this.state.error?.stack || this.state.error)}
           </pre>
-          <p>Please share a screenshot of this error!</p>
+          <p style={{ marginTop: 16, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', fontSize: '0.85rem' }}>Please share a screenshot of this error.</p>
         </div>
       );
     }
