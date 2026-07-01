@@ -89,7 +89,7 @@ export function getResilientLLM(
     }
 
     logger.info("LLM: Gemini only (no GROQ_API_KEY)");
-    return gemini;
+    return gemini as unknown as BaseChatModel;
   }
 
   // Groq-only fallback (no Gemini key)
@@ -100,7 +100,7 @@ export function getResilientLLM(
       modelName: "llama-3.3-70b-versatile",
       temperature,
       maxTokens: maxOutputTokens,
-    });
+    }) as unknown as BaseChatModel;
   }
 
   // Neither key configured — will fail at invoke() time with a clear error
@@ -110,5 +110,5 @@ export function getResilientLLM(
     apiKey: "MISSING",
     temperature,
     maxOutputTokens,
-  });
+  }) as unknown as BaseChatModel;
 }
