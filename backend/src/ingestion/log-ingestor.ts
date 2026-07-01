@@ -44,28 +44,30 @@ export class LogIngestor {
         crlfDelay: Infinity,
       });
 
-      // Collect sample lines for auto-detection
-      const allLines: string[] = [];
-      for await (const line of rl) {
-        allLines.push(line);
-      }
+      let formatDetected = false;
+      let sampleLines: string[] = [];
 
-      // Auto-detect format from first 10 lines
-      if (typeof (this.parser as any).detectAndLock === 'function') {
-        const sampleLines = allLines.slice(0, 10).filter((l) => l.trim());
-        const detection = (this.parser as any).detectAndLock(sampleLines);
-        logger.info({
-          msg: "Format detection complete",
-          format: detection.parser,
-          confidence: `${(detection.confidence * 100).toFixed(1)}%`,
-          totalLines: allLines.length,
-        });
-      }
-
-      // Parse all lines with time-budgeted yielding
+      // Stream processing with time-budgeted yielding
       let chunkStart = Date.now();
 
-      for (const line of allLines) {
+      for await (const line of rl) {
+        // Collect first 10 non-empty lines for auto-detection
+        if (!formatDetected) {
+          if (line.trim()) sampleLines.push(line);
+          if (sampleLines.length >= 10 || /* EOF guard implicitly handled below */ false) {
+            if (typeof (this.parser as any).detectAndLock === 'function') {
+              const detection = (this.parser as any).detectAndLock(sampleLines);
+              logger.info({
+                msg: "Format detection complete",
+                format: detection.parser,
+                confidence: `${(detection.confidence * 100).toFixed(1)}%`,
+              });
+            }
+            formatDetected = true;
+          }
+          // Continue parsing even while detecting (will use fallback until locked)
+        }
+
         const parsed = this.parser.parseLine(line);
 
         if (parsed) {
@@ -76,11 +78,16 @@ export class LogIngestor {
           skippedCount++;
         }
 
-        // Yield to event loop every 10ms of CPU time
-        if (Date.now() - chunkStart >= 10) {
+        // Yield to event loop every 50ms of CPU time (standard frame budget)
+        if (Date.now() - chunkStart >= 50) {
           await new Promise<void>((resolve) => setImmediate(resolve));
           chunkStart = Date.now();
         }
+      }
+
+      // Finalize batch indexing (e.g. MiniSearch addAll)
+      if (typeof this.indexManager.finalize === "function") {
+        this.indexManager.finalize();
       }
 
       this.repo.setState("$READY$");

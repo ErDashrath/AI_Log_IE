@@ -19,10 +19,12 @@ export const AI_CONFIG = {
   } as Record<ApiEndpoint, number>,
 
   /** Max output tokens per LLM call */
-  completionBudget: 4096,
+  completionBudget: 2048,
 
-  /** Max logs sent to LLM per request */
-  contextBudget: 20,
+
+  /** Max logs sent to LLM per request (keep small for speed) */
+  contextBudget: 10,
+
 
   /** Max log entries accepted in classification request */
   maxClassificationLogs: 50,

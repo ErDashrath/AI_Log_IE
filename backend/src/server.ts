@@ -30,6 +30,24 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.text({ limit: "50mb", type: "text/plain" }));
 app.use(rateLimiter);
 
+// --- AI Route Timeout (310s hard limit) ---
+// Ensures the HTTP response is always sent even if LLM calls hang.
+// Set to 310s to allow the 300s LLM timeout + retries to complete.
+app.use("/api/ai", (req, res, next) => {
+  res.setTimeout(310_000, () => {
+    if (!res.headersSent) {
+      res.status(504).json({
+        success: false,
+        message: "Request timed out. The AI service is taking too long. Please try again.",
+        processingTimeMs: 310_000,
+        data: null,
+      });
+    }
+  });
+  next();
+});
+
+
 // --- Health Probe (always 200 if process alive) ---
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
@@ -70,6 +88,95 @@ app.get("/ready", (_req, res) => {
     logsIngested: 0,
     message: "No log file loaded. Upload a file to begin.",
   });
+});
+
+// --- Dashboard Stats Endpoint ---
+app.get("/api/logs/dashboard", (_req, res) => {
+  try {
+    const repo = container.resolve<MemoryRepository>("IMemoryRepository");
+    if (repo.getState() !== "$READY$") {
+      return res.status(400).json({ success: false, message: "Logs not ready" });
+    }
+
+    const indexMgr = container.resolve<IndexManager>("IIndexManager");
+    const severityIndex = indexMgr.getSeverityIndex();
+    const componentIndex = indexMgr.getComponentIndex();
+    const sorted = indexMgr.getTimestampSorted();
+
+    const severityDistribution: Record<string, number> = {};
+    const severities = ["crit", "error", "warn", "warning", "notice", "info", "debug"];
+    for (const sev of severities) {
+      const count = severityIndex.get(sev)?.length || 0;
+      if (count > 0) severityDistribution[sev] = count;
+    }
+    
+    // Add 'unknown' if there are logs with none of the standard severities
+    const unknownCount = (severityIndex.get("unknown")?.length || 0) + (severityIndex.get("")?.length || 0);
+    if (unknownCount > 0) severityDistribution["unknown"] = unknownCount;
+
+    const components = Array.from(componentIndex.entries())
+      .map(([name, logs]) => ({ name, count: logs.length }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    const timeRange = sorted.length > 0 ? {
+      start: sorted[0].timestamp,
+      end: sorted[sorted.length - 1].timestamp
+    } : null;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalLogs: sorted.length,
+        timeRange,
+        severityDistribution,
+        topComponents: components
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: String(error) });
+  }
+});
+
+// --- Paginated Logs Endpoint ---
+app.get("/api/logs", (req, res) => {
+  try {
+    const repo = container.resolve<MemoryRepository>("IMemoryRepository");
+    if (repo.getState() !== "$READY$") {
+      return res.status(400).json({ success: false, message: "Logs not ready" });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 100;
+    
+    // Safety check limits
+    const safeLimit = Math.min(Math.max(1, limit), 1000);
+    const safePage = Math.max(1, page);
+    
+    const allLogs = repo.getLogs();
+    const totalLogs = allLogs.length;
+    
+    const startIndex = (safePage - 1) * safeLimit;
+    const endIndex = Math.min(startIndex + safeLimit, totalLogs);
+    
+    const logs = allLogs.slice(startIndex, endIndex);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        logs,
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: totalLogs,
+          totalPages: Math.ceil(totalLogs / safeLimit),
+          hasMore: endIndex < totalLogs
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: String(error) });
+  }
 });
 
 // --- File Upload Endpoint ---

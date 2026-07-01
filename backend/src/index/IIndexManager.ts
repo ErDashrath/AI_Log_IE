@@ -7,4 +7,6 @@ export interface IIndexManager {
   search(query: string, options?: any): any[];
   getLogsByTimeWindow(startTime?: Date, endTime?: Date): number[];
   getHighestErrorDensityWindow(): { start: Date; end: Date };
+  finalize?(): void;
 }
+

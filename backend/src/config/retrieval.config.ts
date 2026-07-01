@@ -24,8 +24,9 @@ export const RETRIEVAL_CONFIG = {
     },
   },
 
-  /** Maximum logs to send to LLM after ranking */
-  contextBudget: 20,
+  /** Maximum logs to send to LLM after ranking (keep small for speed) */
+  contextBudget: 10,
+
 
   /** Max duplicate templates allowed in context */
   maxTemplatesPerGroup: 2,

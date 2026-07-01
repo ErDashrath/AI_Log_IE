@@ -30,8 +30,10 @@ export class IndexManager implements IIndexManager {
   private templateIndex = new Map<string, number[]>();
   private timestampSorted: { lineNum: number; timestamp: Date }[] = [];
   private allLogs: ParsedLog[] = []; // reference for time-window lookups
+  private miniSearchDocs: any[] = [];
 
   private miniSearch: MiniSearch;
+
 
   constructor() {
     this.miniSearch = new MiniSearch({
@@ -57,8 +59,8 @@ export class IndexManager implements IIndexManager {
     // Keep reference for time-window lookups
     this.allLogs[lineNum] = log;
 
-    // MiniSearch — compact BM25 index
-    this.miniSearch.add({
+    // MiniSearch — collect for batch indexing
+    this.miniSearchDocs.push({
       id: lineNum,
       message: log.message,
       template: log.template,
@@ -66,6 +68,22 @@ export class IndexManager implements IIndexManager {
       severity: log.severity,
     });
   }
+
+  /**
+   * Finalizes indexing after ingestion completes.
+   * Performs a batch add to MiniSearch which is vastly faster than 1x1.
+   */
+  finalize(): void {
+    if (this.miniSearchDocs.length > 0) {
+      this.miniSearch.addAll(this.miniSearchDocs);
+      logger.info({
+        msg: "MiniSearch batch indexing complete",
+        count: this.miniSearchDocs.length,
+      });
+      this.miniSearchDocs = [];
+    }
+  }
+
 
   /**
    * BM25 full-text search via MiniSearch.
@@ -198,7 +216,9 @@ export class IndexManager implements IIndexManager {
     this.templateIndex = new Map();
     this.timestampSorted = [];
     this.allLogs = [];
+    this.miniSearchDocs = [];
     this.miniSearch = new MiniSearch({
+
       fields: RETRIEVAL_CONFIG.miniSearch.fields,
       storeFields: RETRIEVAL_CONFIG.miniSearch.storeFields,
       idField: "id",

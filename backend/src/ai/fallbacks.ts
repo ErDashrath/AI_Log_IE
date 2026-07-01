@@ -13,9 +13,13 @@ import { RCAResponse } from "../schemas/rca.schema";
 
 export const FALLBACK_CLASSIFICATION: ClassificationResponse = {
   classifications: [],
+  totalClassified: 0,
+  categorySummary: {},
+  mode: "auto",
   fallback: true,
   fallbackReason: "AI service temporarily unavailable. Classification results pending.",
 };
+
 
 export const FALLBACK_TIMELINE: TimelineResponse = {
   events: [],

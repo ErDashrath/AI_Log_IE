@@ -6,7 +6,7 @@ import { IMemoryRepository } from "../repository/IMemoryRepository";
 import { IRetrievalFactory } from "../retrieval/IRetrievalFactory";
 import { RetrievalStrategyFactory } from "../retrieval/retrieval-factory";
 import { RCAResponseSchema } from "../schemas/rca.schema";
-import { RCAGraph } from "../ai/rca-graph";
+import { RCAGraphWorkflow } from "../ai/graphs/rca.graph";
 import { ApiResponse } from "../schemas/api.schema";
 import pino from "pino";
 
@@ -91,8 +91,13 @@ export class RootCauseAnalysisController {
       }
 
       // Execute RCA multi-step reasoning graph
-      const rcaGraph = new RCAGraph(this.aiService);
-      const result = await rcaGraph.execute(evidenceLogs, this.repo.getLogs());
+      const graphState = await RCAGraphWorkflow.invoke({ 
+        context: evidenceLogs, 
+        allLogs: this.repo.getLogs() 
+      });
+      const result = graphState.result;
+
+      if (!result) throw new Error("RCA graph returned no result");
 
       const response: ApiResponse<typeof result> = {
         success: true,

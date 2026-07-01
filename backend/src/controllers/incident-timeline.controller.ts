@@ -5,7 +5,7 @@ import { IAIService } from "../ai/IAIService";
 import { IRetrievalFactory } from "../retrieval/IRetrievalFactory";
 import { RetrievalStrategyFactory } from "../retrieval/retrieval-factory";
 import { TimelineResponseSchema } from "../schemas/timeline.schema";
-import { timelinePrompt } from "../prompts/v1_timeline.prompt";
+import { TimelineGraph } from "../ai/graphs/timeline.graph";
 import { ApiResponse } from "../schemas/api.schema";
 import pino from "pino";
 
@@ -78,13 +78,10 @@ export class IncidentTimelineController {
         return;
       }
 
-      // Build prompt and call AI
-      const prompt = timelinePrompt(contextLogs);
-      const result = await this.aiService.callModel(
-        prompt,
-        TimelineResponseSchema,
-        "timeline"
-      );
+      const graphState = await TimelineGraph.invoke({ contextLogs });
+      const result = graphState.result;
+
+      if (!result) throw new Error("Timeline graph returned no result");
 
       const response: ApiResponse<typeof result> = {
         success: true,
